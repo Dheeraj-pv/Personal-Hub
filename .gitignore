@@ -1,0 +1,10 @@
+# Never commit hub data or secrets
+*.db
+*.db-wal
+*.db-shm
+data/
+.env
+.env.*
+*.token
+__pycache__/
+.venv/

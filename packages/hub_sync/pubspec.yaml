@@ -1,0 +1,14 @@
+name: hub_sync
+description: Shared offline-first sync client (and test mock hub) for personal apps.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  http: ^1.2.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.25.0
