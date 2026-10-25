@@ -34,6 +34,7 @@ class MockHub {
 
   static const pageSize = 500;
   static const maxBodyBytes = 2 * 1024 * 1024;
+  static const maxChanges = 500;
   static const apps = {'expenses', 'notes'};
 
   final HttpServer _server;
@@ -172,17 +173,22 @@ class MockHub {
     if (!apps.contains(app)) return _json(req, 404, {'error': 'unknown app'});
 
     final bytes = <int>[];
+    var total = 0;
     await for (final chunk in req) {
-      bytes.addAll(chunk);
-      if (bytes.length > maxBodyBytes) {
-        return _json(req, 413, {'error': 'body too large'});
-      }
+      total += chunk.length;
+      if (total <= maxBodyBytes) bytes.addAll(chunk); // keep draining if over
+    }
+    if (total > maxBodyBytes) {
+      return _json(req, 413, {'error': 'body too large'});
     }
     final Map<String, dynamic> body;
     try {
       body = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
     } on Object {
       return _json(req, 400, {'error': 'bad json'});
+    }
+    if ((body['changes'] as List).length > maxChanges) {
+      return _json(req, 400, {'error': 'more than $maxChanges changes'});
     }
     receivedBodies.add(body);
 

@@ -38,6 +38,9 @@ hub that was wiped and refilled past your cursor is detected and everything is r
   stored, incoming wins (new seq); otherwise the stored row is returned in
   `changes` regardless of cursor.
 - Max 500 changes per request each way; engine loops while `more` or more dirty.
+- Max request body 2 MiB (413). On 413 the engine halves the push batch (down to 1) for the rest of that run
+  and retries; a single row that is still too large ends the run with `Row too large to sync: <table>/<id>`
+  (no row content, row stays dirty and, being first in line, keeps blocking later pushes until it is made smaller).
 - Timeouts: connect 3 s, total 15 s. Failures are quiet: rows stay dirty, the
   cursor only moves after `applyRemote` succeeded, next trigger retries.
 - Pushes are idempotent. Tombstones are never purged.

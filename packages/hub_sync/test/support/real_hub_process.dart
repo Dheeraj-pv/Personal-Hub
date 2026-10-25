@@ -27,7 +27,8 @@ class RealHubProcess {
   static Future<RealHubProcess> create() async {
     final repo = repoDir();
     if (!File('${repo.path}/pyproject.toml').existsSync()) {
-      throw StateError('HUB_REPO does not look like the hub repo: ${repo.path}');
+      throw StateError(
+          'HUB_REPO does not look like the hub repo: ${repo.path}');
     }
     final tmp = await Directory.systemTemp.createTemp('real_hub_test_');
     final rnd = Random.secure();

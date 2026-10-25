@@ -74,11 +74,25 @@ class SyncEngine {
     var pushed = 0;
     var pulled = 0;
     var resetHandled = false;
+    // Rows per push for this run; halves on 413 and resets on the next run.
+    var batch = batchSize;
     try {
       for (var i = 0; i < maxIterations; i++) {
-        final dirty = await store.readDirty(batchSize);
+        final dirty = await store.readDirty(batch);
         final cursor = await store.getCursor();
-        final res = await client.sync(app, cursor, dirty);
+        final SyncResponse res;
+        try {
+          res = await client.sync(app, cursor, dirty);
+        } on HubPayloadTooLargeException {
+          if (dirty.isEmpty) rethrow;
+          if (dirty.length == 1) {
+            // Names the row only; never its content. It stays dirty.
+            throw HubException(
+                'Row too large to sync: ${dirty.first.table}/${dirty.first.id}');
+          }
+          batch = dirty.length ~/ 2;
+          continue;
+        }
         final seen = res.instanceId;
         final Object s = store;
         var instanceChanged = false;
@@ -95,7 +109,8 @@ class SyncEngine {
           // there, so forget the cursor, have the store re-mark everything
           // dirty and go round again (once; a second time is an error).
           if (resetHandled) {
-            throw HubException('The hub keeps reporting a different or older state');
+            throw HubException(
+                'The hub keeps reporting a different or older state');
           }
           resetHandled = true;
           await store.setCursor(0);
@@ -105,14 +120,18 @@ class SyncEngine {
           if (instanceChanged) await (s as InstanceAware).setInstanceId(seen!);
           continue;
         }
-        // Hub has the pushed rows; if a refused row comes back below, the
-        // apply step overwrites it with the hub's copy.
-        await store.markSynced(dirty);
-        pushed += dirty.length;
+        // Apply before markSynced: a refused row (the hub holds a newer copy)
+        // comes back in `res.changes` while our edit is still dirty, so the
+        // store can keep our text (e.g. as a conflict copy) instead of
+        // finding a clean row and overwriting it. markSynced then skips any
+        // row whose updated_at no longer matches what was pushed. If apply
+        // throws, the pushed rows stay dirty and are simply sent again.
         await store.applyRemote(res.changes);
         pulled += res.changes.length;
+        await store.markSynced(dirty);
+        pushed += dirty.length;
         if (res.cursor > cursor) await store.setCursor(res.cursor);
-        if (!res.more && dirty.length < batchSize) break;
+        if (!res.more && dirty.length < batch) break;
       }
       _failures = 0;
       _nextAllowedAt = null;

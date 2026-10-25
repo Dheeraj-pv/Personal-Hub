@@ -32,6 +32,13 @@ class HubServerException extends HubException {
   final int? statusCode;
 }
 
+/// 413: the request body exceeded the hub's size cap (2 MiB). The engine
+/// reacts by sending fewer changes per request.
+class HubPayloadTooLargeException extends HubServerException {
+  HubPayloadTooLargeException()
+      : super('Hub rejected the request as too large (413)', statusCode: 413);
+}
+
 /// Hub answer to a sync request.
 class SyncResponse {
   const SyncResponse({
@@ -138,6 +145,7 @@ class HubClient {
               statusCode: res.statusCode);
           continue;
         }
+        if (res.statusCode == 413) throw HubPayloadTooLargeException();
         if (res.statusCode != 200) {
           throw HubServerException('Unexpected status ${res.statusCode}',
               statusCode: res.statusCode);

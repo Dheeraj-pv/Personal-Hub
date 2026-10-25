@@ -164,7 +164,8 @@ void main() {
       expect(c.store.get(_table, 'x')!.data['v'], 'b');
     });
 
-    test('two devices with interleaved edits and deletes converge, tombstones '
+    test(
+        'two devices with interleaved edits and deletes converge, tombstones '
         'included', () async {
       final a = device('dev-a');
       final b = device('dev-b');

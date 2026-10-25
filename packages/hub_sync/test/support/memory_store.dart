@@ -17,6 +17,9 @@ class MemoryStore implements SyncStore, HubResetAware, InstanceAware {
   /// Make [applyRemote] throw (to test cursor handling).
   Object? failApplyWith;
   int applyCalls = 0;
+
+  /// Called with the pulled rows before they are applied (to inspect state).
+  void Function(List<SyncChange> changes)? onApply;
   int resetCalls = 0;
 
   /// Local edit: stores the row as dirty.
@@ -55,6 +58,7 @@ class MemoryStore implements SyncStore, HubResetAware, InstanceAware {
   @override
   Future<void> applyRemote(List<SyncChange> changes) async {
     applyCalls++;
+    onApply?.call(changes);
     final err = failApplyWith;
     if (err != null) throw err;
     for (final c in changes) {

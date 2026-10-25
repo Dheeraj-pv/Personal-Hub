@@ -74,6 +74,24 @@ void main() {
       expect(store.isDirty('transactions', 'a'), isFalse);
     });
 
+    test('a refused row reaches applyRemote while our edit is still dirty',
+        () async {
+      hub.seedFromOtherDevice('expenses', [
+        change('a', 300, data: {'v': 'theirs'})
+      ]);
+      store.edit('transactions', 'a', 200, data: {'v': 'mine'});
+      final seen = <bool>[];
+      store.onApply = (changes) {
+        for (final c in changes) {
+          seen.add(store.isDirty(c.table, c.id));
+        }
+      };
+      await engine.sync();
+      expect(seen, isNotEmpty);
+      expect(seen.every((dirty) => dirty), isTrue);
+      expect(store.isDirty('transactions', 'a'), isFalse);
+    });
+
     test('equal updated_at keeps the incoming row', () async {
       hub.seedFromOtherDevice('expenses', [
         change('a', 200, data: {'v': 'theirs'})
@@ -116,6 +134,85 @@ void main() {
       expect(store.rowCount, 1250);
       expect(store.dirtyCount, 0);
       expect(await store.getCursor(), hub.latestSeq);
+    });
+  });
+
+  group('request size limits', () {
+    final big = 'x' * 30000; // 100 of these (~3 MB) exceed the 2 MiB cap
+
+    test('413 halves the batch; all rows delivered once and marked synced',
+        () async {
+      for (var i = 0; i < 100; i++) {
+        store.edit('transactions', 'id$i', 1000 + i, data: {'b': big});
+      }
+      final r = await engine.sync();
+      expect(r.ok, isTrue);
+      expect(r.pushed, 100);
+      expect(store.dirtyCount, 0);
+      expect(hub.rows('expenses'), hasLength(100));
+      // 413'd requests are not recorded, so each row appears exactly once.
+      final ids = [
+        for (final b in hub.receivedBodies)
+          for (final c in (b['changes'] as List)) (c as Map)['id']
+      ];
+      expect(ids, hasLength(100));
+      expect(ids.toSet(), hasLength(100));
+      // 100 -> 413, 50 -> ok, 50 -> ok (reduced size kept), then an empty
+      // push confirms nothing is left (same as the 500-row case).
+      expect(hub.syncRequestCount, 4);
+      expect((hub.receivedBodies[0]['changes'] as List).length, 50);
+    });
+
+    test('the reduced size does not carry over to the next run', () async {
+      for (var i = 0; i < 100; i++) {
+        store.edit('transactions', 'id$i', 1000 + i, data: {'b': big});
+      }
+      await engine.sync();
+      final before = hub.syncRequestCount;
+      store.edit('transactions', 'new', 5000);
+      await engine.sync();
+      expect(hub.syncRequestCount, before + 1);
+      expect((hub.receivedBodies.last['changes'] as List).length, 1);
+    });
+
+    test('a lone oversized row gives a clear error and stays dirty', () async {
+      store.edit('transactions', 'small', 1000);
+      store.edit('transactions', 'huge', 1001,
+          data: {'b': 'y' * (MockHub.maxBodyBytes + 10)});
+      final r = await engine.sync();
+      expect(r.ok, isFalse);
+      expect(r.error, 'Row too large to sync: transactions/huge');
+      expect(r.error, isNot(contains(hub.token)));
+      expect(r.error, isNot(contains('yyyy')));
+      expect(store.isDirty('transactions', 'huge'), isTrue);
+      expect(hub.row('expenses', 'transactions', 'huge'), isNull);
+      // 2 rows -> 413, [small] -> ok, [huge] -> 413 -> stop (no loop). The
+      // small row is not held back by the oversized one.
+      expect(hub.syncRequestCount, 3);
+      expect(store.isDirty('transactions', 'small'), isFalse);
+    });
+
+    test('small batches are unchanged: one request, no shrinking', () async {
+      for (var i = 0; i < 10; i++) {
+        store.edit('transactions', 'id$i', 1000 + i);
+      }
+      final r = await engine.sync();
+      expect(r.ok, isTrue);
+      expect(hub.syncRequestCount, 1);
+      expect((hub.receivedBodies[0]['changes'] as List).length, 10);
+    });
+
+    test('more than 500 changes is still a plain 400 error, not shrunk',
+        () async {
+      await expectLater(
+        client.sync(
+            'expenses', 0, [for (var i = 0; i < 501; i++) change('c$i', i)]),
+        throwsA(isA<HubServerException>()
+            .having((e) => e.statusCode, 'statusCode', 400)
+            .having(
+                (e) => e, 'type', isNot(isA<HubPayloadTooLargeException>()))),
+      );
+      expect(hub.syncRequestCount, 1);
     });
   });
 
