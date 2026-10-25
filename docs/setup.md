@@ -7,7 +7,7 @@ Commands marked **(sudo)** change your system, so you run them yourself.
 ## 1. Install the dependencies
 
 ```bash
-cd ~/dev/personal-hub
+cd ~/Personal_files/personal-hub
 uv sync
 mkdir -p -m 700 ~/PersonalHub
 ```
@@ -45,7 +45,7 @@ systemctl --user enable --now personal-hub-backup.timer
 ```
 
 These are *user* units, so no sudo. Linger is already on for your account, so they start at boot.
-If the repo lives somewhere other than `~/dev/personal-hub`, edit `WorkingDirectory` and `ExecStart` in the service files.
+If the repo lives somewhere other than `~/Personal_files/personal-hub`, edit `WorkingDirectory` and `ExecStart` in the service files.
 
 Right after `enable --now`, check the service really started:
 
@@ -175,6 +175,14 @@ re-sent; treat restore as a last resort.
 
 **Before wiping `hub.db`, keep a manual copy** (`cp -a ~/PersonalHub/data ~/hub-data-copy`). An empty database also
 passes the backup integrity check, so within two weeks the nightly backups would rotate out all 14 good copies.
+
+**Notes as markdown files:** after each sync of the `notes` app the hub writes one `.md` file per note to
+`~/PersonalHub/notes` (override with `HUB_NOTES_DIR`; keep it under `~/PersonalHub`, or add its folder to
+`ReadWritePaths`). Deleted notes move to `notes/.trash/`. The files are a one-way copy; edit notes in the app.
+After a hub reset or restore, rebuild every file from the database (safe to repeat; stop nothing, run as yourself):
+```bash
+HUB_DB=~/PersonalHub/data/hub.db uv run python -m hub.notes_export
+```
 
 **Rotate the token** (if it leaked, or you pasted it somewhere):
 ```bash

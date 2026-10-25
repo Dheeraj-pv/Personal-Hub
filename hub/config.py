@@ -14,6 +14,17 @@ _PLACEHOLDER_TOKENS = frozenset({"changeme", "change-me", "your-token-here", "to
 
 log = logging.getLogger("hub")
 DEFAULT_DB = "~/PersonalHub/data/hub.db"
+DEFAULT_NOTES_DIR = "~/PersonalHub/notes"
+
+
+def db_path_from_env(env: Mapping[str, str] | None = None) -> Path:
+    env = os.environ if env is None else env
+    return Path(env.get("HUB_DB") or DEFAULT_DB).expanduser()
+
+
+def notes_dir_from_env(env: Mapping[str, str] | None = None) -> Path:
+    env = os.environ if env is None else env
+    return Path(env.get("HUB_NOTES_DIR") or DEFAULT_NOTES_DIR).expanduser()
 
 
 class ConfigError(RuntimeError):
@@ -27,6 +38,8 @@ class Settings:
     host: str = "127.0.0.1"
     port: int = 8787
     allow_non_loopback: bool = False
+    # None disables the markdown export (e.g. tests); load_settings always sets it.
+    notes_dir: Path | None = None
 
     def __post_init__(self) -> None:
         lowered = self.token.strip().lower()
@@ -56,10 +69,11 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     allow = env.get("HUB_ALLOW_NON_LOOPBACK") == "1"
     settings = Settings(
         token=env.get("HUB_TOKEN", ""),
-        db_path=Path(env.get("HUB_DB") or DEFAULT_DB).expanduser(),
+        db_path=db_path_from_env(env),
         host=env.get("HUB_HOST") or "127.0.0.1",
         port=port,
         allow_non_loopback=allow,
+        notes_dir=notes_dir_from_env(env),
     )
     if settings.host not in LOOPBACK_HOSTS:
         log.warning(

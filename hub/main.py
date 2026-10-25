@@ -13,12 +13,16 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
+from starlette.background import BackgroundTask
 from starlette.responses import JSONResponse
 
 from . import __version__
 from .auth import is_authorized
 from .config import Settings, load_settings
 from .db import init_db, open_db
+from .notes_export import APP as NOTES_APP
+from .notes_export import TABLE as NOTES_TABLE
+from .notes_export import export_notes
 from .schemas import MAX_CHANGES, SyncIn
 from .sync import health_apps, instance_id, run_sync
 
@@ -132,7 +136,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Deliberately generic: validation messages would echo parts of the input.
             return _error(400, "invalid request")
         result = await run_in_threadpool(_sync, app_name, payload)
-        return JSONResponse(result)
+        # Markdown export runs after the response is sent and never raises.
+        ids = [c.id for c in payload.changes if c.table == NOTES_TABLE]
+        export = None
+        if app_name == NOTES_APP and settings.notes_dir is not None and ids:
+            export = BackgroundTask(export_notes, settings.db_path, settings.notes_dir, ids)
+        return JSONResponse(result, background=export)
 
     return app
 

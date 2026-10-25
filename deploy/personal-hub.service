@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 EnvironmentFile=%h/.config/personal-hub/env
-WorkingDirectory=%h/dev/personal-hub
-ExecStart=%h/dev/personal-hub/.venv/bin/uvicorn --factory hub.main:create_app --host 127.0.0.1 --port 8787
+WorkingDirectory=%h/Personal_files/personal-hub
+ExecStart=%h/Personal_files/personal-hub/.venv/bin/uvicorn --factory hub.main:create_app --host 127.0.0.1 --port 8787
 Restart=on-failure
 RestartSec=5
 UMask=0077
