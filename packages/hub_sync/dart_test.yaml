@@ -1,0 +1,6 @@
+tags:
+  # Tests that start the real Python hub. Skipped unless HUB_REPO is set
+  # (see README, "Testing against the real hub"). Each test also gets a longer
+  # timeout because it starts a subprocess.
+  real-hub:
+    timeout: 3x

@@ -226,6 +226,51 @@ void main() {
       expect(await store.getCursor(), lessThanOrEqualTo(hub.latestSeq));
     });
 
+    test('wiped hub refilled past our cursor is detected by instance id',
+        () async {
+      store.edit('transactions', 'a', 100);
+      store.edit('transactions', 'b', 200);
+      expect((await engine.sync()).ok, isTrue);
+      final cursor = await store.getCursor();
+      expect(store.resetCalls, 0);
+
+      // Wipe, then another device refills the hub beyond our cursor, so the
+      // lower-cursor check alone cannot notice.
+      hub.reset();
+      hub.seedFromOtherDevice('expenses',
+          [for (var i = 0; i < cursor + 3; i++) change('o$i', 10 + i)]);
+      expect(hub.latestSeq, greaterThan(cursor));
+
+      final r = await engine.sync();
+      expect(r.ok, isTrue, reason: r.error);
+      expect(store.resetCalls, 1);
+      expect(hub.rows('expenses').map((c) => c.id), containsAll(['a', 'b']));
+      expect(store.dirtyCount, 0);
+      expect(await store.getInstanceId(), hub.instanceId);
+      // Settled: another run does not reset again.
+      expect((await engine.sync()).ok, isTrue);
+      expect(store.resetCalls, 1);
+    });
+
+    test('first contact stores the instance id without marking rows dirty',
+        () async {
+      hub.seedFromOtherDevice('expenses', [change('r1', 10)]);
+      store.edit('transactions', 'a', 100);
+      expect(await store.getInstanceId(), isNull);
+      expect((await engine.sync()).ok, isTrue);
+      expect(store.resetCalls, 0);
+      expect(await store.getInstanceId(), hub.instanceId);
+      expect(store.get('transactions', 'r1'), isNotNull);
+    });
+
+    test('a hub without instance_id is ignored', () async {
+      hub.sendInstanceId = false;
+      store.edit('transactions', 'a', 100);
+      expect((await engine.sync()).ok, isTrue);
+      expect(await store.getInstanceId(), isNull);
+      expect(store.resetCalls, 0);
+    });
+
     test('a store without HubResetAware still resets its cursor', () async {
       final plain = _PlainStore();
       final e = SyncEngine(client: client, store: plain, app: 'expenses');

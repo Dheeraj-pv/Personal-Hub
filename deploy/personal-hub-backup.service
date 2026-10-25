@@ -1,0 +1,12 @@
+[Unit]
+Description=Personal Hub daily database backup
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/dev/personal-hub
+ExecStart=%h/dev/personal-hub/.venv/bin/python -m hub.backup
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=%h/PersonalHub

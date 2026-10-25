@@ -44,6 +44,13 @@ class MockHub {
   final Map<String, Set<String>> _devices = {};
   final List<MockFailure> _failures = [];
   int _seq = 0;
+  int _generation = 0;
+
+  /// Set false to behave like an older hub that sends no `instance_id`.
+  bool sendInstanceId = true;
+
+  /// Changes on [reset], like the real hub's `instance_id` after a wipe.
+  String get instanceId => 'mock-instance-$_generation';
 
   /// Added before every request is processed (use to trigger client timeouts).
   Duration latency = Duration.zero;
@@ -75,6 +82,7 @@ class MockHub {
     _devices.clear();
     _lastSync.clear();
     _seq = 0;
+    _generation++;
   }
 
   Future<void> stop() => _server.close(force: true);
@@ -141,6 +149,7 @@ class MockHub {
       final body = <String, dynamic>{'status': 'ok'};
       if (authed) {
         body['hub_version'] = 'mock-1';
+        if (sendInstanceId) body['instance_id'] = instanceId;
         body['server_time'] = DateTime.now().toUtc().millisecondsSinceEpoch;
         body['apps'] = {
           for (final a in _rows.keys)
@@ -225,6 +234,7 @@ class MockHub {
       'cursor': reported,
       'changes': [for (final c in out) c.toJson()],
       'more': more,
+      if (sendInstanceId) 'instance_id': instanceId,
     };
   }
 

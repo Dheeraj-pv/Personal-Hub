@@ -79,17 +79,30 @@ class SyncEngine {
         final dirty = await store.readDirty(batchSize);
         final cursor = await store.getCursor();
         final res = await client.sync(app, cursor, dirty);
-        if (res.cursor < cursor) {
+        final seen = res.instanceId;
+        final Object s = store;
+        var instanceChanged = false;
+        if (seen != null && s is InstanceAware) {
+          final known = await s.getInstanceId();
+          if (known == null) {
+            await s.setInstanceId(seen); // first contact: nothing to redo
+          } else {
+            instanceChanged = known != seen;
+          }
+        }
+        if (instanceChanged || res.cursor < cursor) {
           // The hub is behind us: it was reset or replaced. Our rows are not
           // there, so forget the cursor, have the store re-mark everything
           // dirty and go round again (once; a second time is an error).
           if (resetHandled) {
-            throw HubException('The hub keeps reporting an older position');
+            throw HubException('The hub keeps reporting a different or older state');
           }
           resetHandled = true;
           await store.setCursor(0);
-          final Object s = store;
           if (s is HubResetAware) await s.onHubReset();
+          // Remember the new database only after the reset is done, so a crash
+          // in between triggers the reset again.
+          if (instanceChanged) await (s as InstanceAware).setInstanceId(seen!);
           continue;
         }
         // Hub has the pushed rows; if a refused row comes back below, the

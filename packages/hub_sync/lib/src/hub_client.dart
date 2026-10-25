@@ -38,10 +38,14 @@ class SyncResponse {
     required this.cursor,
     required this.changes,
     required this.more,
+    this.instanceId,
   });
   final int cursor;
   final List<SyncChange> changes;
   final bool more;
+
+  /// Identifies the hub's database; null for hubs that do not send one.
+  final String? instanceId;
 }
 
 /// Result of GET /health.
@@ -104,6 +108,9 @@ class HubClient {
             SyncChange.fromJson(Map<String, dynamic>.from(c as Map)),
         ],
         more: body['more'] == true,
+        instanceId: body['instance_id'] is String
+            ? body['instance_id'] as String
+            : null,
       );
     } on Object {
       throw HubServerException('Malformed sync response');

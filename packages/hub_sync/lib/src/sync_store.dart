@@ -29,6 +29,19 @@ abstract interface class HubResetAware {
   Future<void> onHubReset();
 }
 
+/// Optional add-on for a [SyncStore]: remembers which hub database the cursor
+/// belongs to. The hub sends an `instance_id` that changes when its database is
+/// wiped or replaced, which catches a wiped hub that has since been refilled
+/// past our cursor (the lower-cursor check alone would miss that). When the
+/// stored id differs from the hub's, the engine treats it like a hub reset.
+/// On first contact (nothing stored) the id is just stored; nothing is marked
+/// dirty. Hubs that send no id are ignored.
+abstract interface class InstanceAware {
+  /// The stored hub instance id, or null if none has been stored yet.
+  Future<String?> getInstanceId();
+  Future<void> setInstanceId(String id);
+}
+
 /// Thrown by a store when it cannot apply a pulled row. [message] is shown as
 /// the sync error, so it must name the row (e.g. `categories/<id>`) and never
 /// contain a token or other secret. Any other exception type is reported only

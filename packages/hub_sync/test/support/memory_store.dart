@@ -9,9 +9,10 @@ class _Row {
 /// In-memory [SyncStore] with test hooks. Applies the same rules a real
 /// store must: remote apply never sets dirty, and a dirty local row that is
 /// newer than the remote one is kept.
-class MemoryStore implements SyncStore, HubResetAware {
+class MemoryStore implements SyncStore, HubResetAware, InstanceAware {
   final Map<String, _Row> _rows = {};
   int _cursor = 0;
+  String? _instanceId;
 
   /// Make [applyRemote] throw (to test cursor handling).
   Object? failApplyWith;
@@ -74,6 +75,12 @@ class MemoryStore implements SyncStore, HubResetAware {
       r.dirty = true;
     }
   }
+
+  @override
+  Future<String?> getInstanceId() async => _instanceId;
+
+  @override
+  Future<void> setInstanceId(String id) async => _instanceId = id;
 
   @override
   Future<int> getCursor() async => _cursor;
